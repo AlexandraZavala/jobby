@@ -7,17 +7,31 @@ from selenium.common.exceptions import TimeoutException, JavascriptException
 from webdriver_manager.chrome import ChromeDriverManager
 import json
 import time
+import os
+from dotenv import load_dotenv
+from selenium.webdriver.common.keys import Keys
 
-# --- Configuración del navegador ---
+# Cargar variables de entorno
+load_dotenv()
+
+# Obtener credenciales desde variables de entorno
+EMAIL = os.getenv('EMAIL')
+PASSWORD = os.getenv('PASSWORD')
+
+if not EMAIL or not PASSWORD:
+    print("❌ Error: Las variables EMAIL y PASSWORD deben estar definidas en el archivo .env")
+    exit(1)
+
+# --- Configuración del navegador en modo headless ---
 options = webdriver.ChromeOptions()
-options.add_argument("--start-maximized")
+options.add_argument("--headless")  # Modo headless
 options.add_argument("--no-sandbox")
 options.add_argument("--disable-dev-shm-usage")
 options.add_argument("--disable-gpu")
 options.add_argument("--disable-extensions")
 options.add_argument("--disable-plugins")
 options.add_argument("--disable-images")
-options.add_argument("--incognito")  # Modo incógnito para evitar perfiles
+options.add_argument("--window-size=1920,1080")  # Tamaño de ventana fijo
 options.add_experimental_option("excludeSwitches", ["enable-automation"])
 options.add_experimental_option('useAutomationExtension', False)
 
@@ -61,9 +75,102 @@ driver.execute_cdp_cmd("Page.addScriptToEvaluateOnNewDocument", {
     "source": xhr_interceptor
 })
 
-# --- Paso 1: Abrir primera página y esperar login manual ---
-driver.get("https://pucp-csm.symplicity.com/students/app/jobs/search?perPage=20&page=1&sort=!postdate")
-input("🔐 Inicia sesión completamente. Luego presiona ENTER aquí para continuar...")
+# --- Función para verificar si ya estamos logueados ---
+def verificar_login_status():
+    try:
+        # Verificar si ya estamos en la página de empleos
+        if driver.find_element(By.CLASS_NAME, "list-page-job-search"):
+            print("✅ Ya estamos logueados y en la página de empleos")
+            return True
+        return False
+    except:
+        return False
+
+# --- Función para hacer login automático ---
+def hacer_login():
+    print("🔐 Iniciando login automático...")
+    
+    # Ir a la página de login
+    driver.get("https://pucp-csm.symplicity.com/students/app/jobs/search")
+    time.sleep(3)  # Esperar a que la página cargue completamente
+    
+    # Verificar si ya estamos logueados
+    if verificar_login_status():
+        return True
+    
+    try:
+        # Esperar a que aparezca el formulario de login
+        print("⏳ Esperando formulario de login...")
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_element_located((By.ID, "username"))
+        )
+        
+        print("📝 Ingresando credenciales...")
+        # Ingresar email
+        email_field = driver.find_element(By.ID, "username")
+        email_field.clear()
+        email_field.send_keys(EMAIL)
+        time.sleep(1)
+        
+        # Ingresar contraseña
+        password_field = driver.find_element(By.ID, "password")
+        password_field.clear()
+        password_field.send_keys(PASSWORD)
+        time.sleep(1)
+        
+        # Buscar el botón de login con el selector correcto basado en el HTML real
+        login_button = None
+        selectors = [
+            "//input[@type='submit' and @value='Iniciar sesión']",
+            "//input[@type='submit']",
+            "//button[@type='submit']",
+            "//input[contains(@class, 'input-submit')]",
+            "//input[contains(@class, 'btn_primary')]",
+            "//button[contains(text(), 'Login')]",
+            "//button[contains(text(), 'Iniciar')]",
+            "//button[contains(text(), 'Sign')]"
+        ]
+        
+        for selector in selectors:
+            try:
+                login_button = driver.find_element(By.XPATH, selector)
+                print(f"✅ Botón de login encontrado con selector: {selector}")
+                break
+            except:
+                continue
+        
+        if not login_button:
+            # Si no encontramos el botón, intentar con Enter en el campo de contraseña
+            print("⚠️ No se encontró botón de login, intentando con Enter...")
+            password_field.send_keys(Keys.RETURN)
+        else:
+            login_button.click()
+        
+        print("⏳ Esperando redirección después del login...")
+        time.sleep(3)  # Esperar a que se procese el login
+        
+        # Esperar a que se complete el login (verificar que estamos en la página de empleos)
+        WebDriverWait(driver, 20).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "list-page-job-search"))
+        )
+        
+        print("✅ Login exitoso")
+        return True
+        
+    except TimeoutException as e:
+        print(f"❌ Error en el login: Timeout - {e}")
+        # Intentar verificar si ya estamos logueados
+        if verificar_login_status():
+            return True
+        return False
+    except Exception as e:
+        print(f"❌ Error inesperado durante el login: {e}")
+        return False
+
+# --- Hacer login automático ---
+if not hacer_login():
+    driver.quit()
+    exit(1)
 
 print("🧭 Iniciando scraping navegando con clics en 'Siguiente'...")
 
