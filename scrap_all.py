@@ -275,4 +275,159 @@ print(f"\n📦 Detalles guardados: {len(detalles)} empleos en 'detalles_empleos.
 if fallidos:
     print(f"⚠️ Fallaron {len(fallidos)} empleos: {fallidos}")
 
+# --- Guardar detalles formateados para chatbot ---
+print(f"\n🔎 Formateando {len(detalles)} empleos para chatbot...")
+
+# Importar las funciones de formateo
+import re
+
+def clean_html_tags(text):
+    """Limpia las etiquetas HTML del texto"""
+    if not text:
+        return ""
+    text = re.sub(r'<[^>]+>', '', text)
+    text = text.replace('&middot;', '•')
+    text = text.replace('&oacute;', 'ó')
+    text = text.replace('&aacute;', 'á')
+    text = text.replace('&eacute;', 'é')
+    text = text.replace('&iacute;', 'í')
+    text = text.replace('&uacute;', 'ú')
+    text = text.replace('&ntilde;', 'ñ')
+    text = text.replace('&nbsp;', ' ')
+    return text.strip()
+
+
+def format_job_for_chatbot(job_data):
+    """Formatea un empleo para el chatbot"""
+    job_info = {
+        "id": job_data.get("job_id", ""),
+        "visual_id": job_data.get("visual_id", ""),
+        "title": clean_html_tags(job_data.get("job_title", "")).strip(),
+        "company": job_data.get("employer_name", ""),
+        "location": "",
+        "job_type": "",
+        "salary_info": "",
+        "start_date": "",
+        "end_date": "",
+        "description": "",
+        "requirements": "",
+        "contact_email": "",
+        "remote_type": "",
+        "experience_level": "",
+        "education_level": "",
+        "majors": [],
+        "languages": [],
+        "vacancies": "",
+        "hours_per_week": ""
+    }
+    
+    # Ubicación
+    if job_data.get("location"):
+        job_info["location"] = ", ".join([loc.get("_label", "") for loc in job_data["location"] if loc.get("_label")])
+    
+    # Tipo de empleo
+    if job_data.get("job_type"):
+        job_info["job_type"] = ", ".join([jt.get("_label", "") for jt in job_data["job_type"] if jt.get("_label")])
+    
+    # Información de salario
+    if job_data.get("compensation_from") or job_data.get("compensation_to"):
+        from_salary = job_data.get("compensation_from", "")
+        to_salary = job_data.get("compensation_to", "")
+        frequency = job_data.get("compensation_frequency", {}).get("_label", "")
+        
+        if from_salary and to_salary:
+            job_info["salary_info"] = f"{from_salary} - {to_salary} {frequency}"
+        elif from_salary:
+            job_info["salary_info"] = f"Desde {from_salary} {frequency}"
+        elif to_salary:
+            job_info["salary_info"] = f"Hasta {to_salary} {frequency}"
+    
+    # Fechas
+    if job_data.get("job_start"):
+        job_info["start_date"] = job_data["job_start"]
+    if job_data.get("job_end"):
+        job_info["end_date"] = job_data["job_end"]
+    
+    # Descripción
+    job_info["description"] = clean_html_tags(job_data.get("job_desc", ""))
+    
+    # Requisitos
+    job_info["requirements"] = clean_html_tags(job_data.get("qualifications", ""))
+    
+    
+    # Email de contacto
+    job_info["contact_email"] = job_data.get("resume_email", "")
+    
+    # Tipo de trabajo remoto
+    if job_data.get("symp_remote_onsite"):
+        job_info["remote_type"] = job_data["symp_remote_onsite"].get("_label", "")
+    
+    # Nivel de experiencia
+    if job_data.get("custom_field_6"):
+        job_info["experience_level"] = job_data["custom_field_6"].get("_label", "")
+    
+    # Nivel de educación
+    if job_data.get("degree_level"):
+        job_info["education_level"] = ", ".join([dl.get("_label", "") for dl in job_data["degree_level"] if dl.get("_label")])
+    
+    # Carreras requeridas
+    if job_data.get("major"):
+        job_info["majors"] = [m.get("_label", "") for m in job_data["major"] if m.get("_label")]
+    
+    # Idiomas
+    if job_data.get("custom_field_1"):
+        job_info["languages"] = [job_data["custom_field_1"].get("_label", "")]
+    
+    # Número de vacantes
+    if job_data.get("nmero_de_vacantes_2"):
+        job_info["vacancies"] = job_data["nmero_de_vacantes_2"].get("_label", "")
+    
+    # Horas por semana
+    if job_data.get("custom_field_10"):
+        job_info["hours_per_week"] = job_data["custom_field_10"].get("_label", "")
+    
+    return job_info
+
+def create_searchable_text(job_info):
+    """Crea un texto searchable para el chatbot"""
+    searchable_parts = [
+        job_info["title"],
+        job_info["company"],
+        job_info["location"],
+        job_info["job_type"],
+        job_info["description"],
+        job_info["requirements"],
+        " ".join([str(m) for m in job_info["majors"] if m]) if job_info["majors"] else "",
+        job_info["experience_level"],
+        job_info["education_level"],
+        " ".join([str(l) for l in job_info["languages"] if l]) if job_info["languages"] else "",
+        job_info["remote_type"]
+    ]
+    
+    return " ".join([part for part in searchable_parts if part])
+
+# Formatear todos los empleos
+formatted_jobs = []
+for i, job in enumerate(detalles, 1):
+    try:
+        formatted_job = format_job_for_chatbot(job)
+        formatted_job["searchable_text"] = create_searchable_text(formatted_job)
+        formatted_jobs.append(formatted_job)
+        
+        if i % 10 == 0:
+            print(f"✅ Formateados {i}/{len(detalles)} empleos")
+            
+    except Exception as e:
+        print(f"⚠️ Error formateando empleo {i}: {e}")
+        continue
+
+# Guardar empleos formateados
+with open("jobs_for_chatbot.json", "w", encoding="utf-8") as f:
+    json.dump(formatted_jobs, f, ensure_ascii=False, indent=2)
+
+print(f"\n✅ Formateo completado!")
+print(f"📦 Empleos formateados guardados en 'jobs_for_chatbot.json'")
+print(f"📊 Total de empleos formateados: {len(formatted_jobs)}")
+
+
 driver.quit()
