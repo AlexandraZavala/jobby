@@ -222,7 +222,7 @@ def probar_retriever():
         return False
 
 
-def main(hacer_scraping=True, crear_vectorstore_bd=True, probar_retriever_bd=False):
+def main(hacer_scraping=True, crear_vectorstore_bd=True):
     """Función principal con opción de scraping, creación de vectorstore y prueba"""
     print("🎯 Iniciando procesamiento...")
     
@@ -241,8 +241,7 @@ def main(hacer_scraping=True, crear_vectorstore_bd=True, probar_retriever_bd=Fal
             print("❌ No se pudo crear vectorstore")
             return
     
-    if probar_retriever_bd:
-        probar_retriever()
+    #probar_retriever()
     
     print("✅ Procesamiento completado")
     print(f"📊 {len(empleos)} empleos procesados")
@@ -253,6 +252,5 @@ if __name__ == "__main__":
    
     HACER_SCRAPING = False  # True = hacer scraping, False = usar JSON existente
     CREAR_VECTORSTORE = False  # True = crear vectorstore, False = solo procesar documentos
-    PROBAR_RETRIEVER = True  # True = probar retriever, False = no probar
-    
-    main(hacer_scraping=HACER_SCRAPING, crear_vectorstore_bd=CREAR_VECTORSTORE, probar_retriever_bd=PROBAR_RETRIEVER) 
+   
+    main(hacer_scraping=HACER_SCRAPING, crear_vectorstore_bd=CREAR_VECTORSTORE) 
