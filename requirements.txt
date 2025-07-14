@@ -7,4 +7,5 @@ langchain==0.1.0
 langchain-community==0.0.10
 chromadb==0.4.18
 sentence-transformers==2.2.2
-huggingface-hub==0.19.4  # ✅ Fijar versión compatible
+huggingface-hub==0.19.4
+tokenizers==0.13.3
