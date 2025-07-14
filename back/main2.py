@@ -15,6 +15,7 @@ from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import Chroma
 from langchain_huggingface import HuggingFaceEmbeddings
+from fastapi.responses import PlainTextResponse
 
 
 load_dotenv()
@@ -195,10 +196,11 @@ async def chat(request: Request):
     prompt = f"""
 Eres un asesor laboral profesional y amable. Tienes acceso a una lista de ofertas laborales relevantes extraídas de una base de datos.
 
-Debes responder exclusivamente usando  esa información. Si el usuario pregunta por carreras, tipos de empleo o áreas, analiza la metadata disponible (como 'carreras requeridas') para agrupar la información de forma clara y además
-recuerda que si te piden listados pues responde con listados no solo des información de las carreras, compórtate como un asesor laboral.
+Debes responder exclusivamente usando esa información. Si el usuario pregunta por las carreras profesionales para las cuales hay empleos disponibles, analiza los campos 'carreras requeridas' o 'majors' de las ofertas y menciona solo los nombres de las carreras que aparecen.
 
-Ofertas relevantes encontradas:
+Luego, pregúntale si le gustaría conocer más detalles sobre alguna de esas opciones.
+
+Ofertas laborales encontradas:
 
 {contexto}
 
@@ -223,17 +225,13 @@ async def recibir_whatsapp(
     Body: str = Form(...),
     From: str = Form(...)
 ):
-    user_id = From  # Usamos el número del usuario como ID
-
-    # Guardamos el historial del usuario
+    user_id = From
     conversaciones[user_id].append({"usuario": Body})
 
-    # Busca documentos con vectorstore
     resultados = vectorstore.similarity_search(Body, k=3)
     contexto = "\n\n".join([doc.page_content for doc in resultados])
 
-    # Reconstruye el historial (últimos 3 turnos)
-    historial = conversaciones[user_id][-3:]  # puedes aumentar a más
+    historial = conversaciones[user_id][-3:]
     historia_txt = ""
     for turno in historial:
         if "usuario" in turno:
@@ -241,39 +239,34 @@ async def recibir_whatsapp(
         if "bot" in turno:
             historia_txt += f"Asesor: {turno['bot']}\n"
 
-    # Construye el prompt
     prompt = f"""
-Eres un asesor laboral profesional y amable. Conversa con el usuario como si fueras un humano.
+Actúas como un asesor laboral amable y cercano. Tienes acceso a una lista de ofertas laborales que vienen de una base de datos actualizada.
 
-Historial reciente:
-{historia_txt}
+Responde al usuario utilizando solo la información que aparece en esas ofertas. Si el usuario te pregunta por las carreras para las que hay empleos, revisa las secciones de 'carreras requeridas' y menciona solo las que realmente aparecen. Puedes usar un tono cordial y natural, como si estuvieras conversando para ayudar.
 
-Ofertas relevantes:
+Aquí tienes las ofertas que coinciden con lo que busca el usuario:
+
 {contexto}
 
 Usuario: {Body}
 Asesor:
 """
-    print("=== PROMPT ===")
-    print(prompt)
-    print("==============")
+
+
     try:
         respuesta = generar_con_together(prompt)
-        print("=== RESPONSE ===")
-        print(respuesta)
-        print("==============")
-        # Para asegurar compatibilidad con Twilio (máx. ≈1600 caracteres)
         if len(respuesta) > 1500:
             respuesta = respuesta[:1450] + "\n\n(Respuesta recortada por límite de mensaje)"
-        conversaciones[user_id][-1]["bot"] = respuesta  # guardar en historial
-    except Exception as e:
+        conversaciones[user_id][-1]["bot"] = respuesta
+    except Exception:
         respuesta = "Lo siento, hubo un error generando la respuesta."
 
-    # Armar respuesta para WhatsApp
+    from twilio.twiml.messaging_response import MessagingResponse
     twilio_resp = MessagingResponse()
     twilio_resp.message(respuesta)
-    return str(twilio_resp)
 
+    # ❗ DEVOLVER como PlainTextResponse
+    return PlainTextResponse(str(twilio_resp), media_type="application/xml")
 
 
     
