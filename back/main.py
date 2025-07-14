@@ -1,8 +1,8 @@
 import json
 import os
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.schema import Document
 import subprocess
 import sys
@@ -241,7 +241,7 @@ def main(hacer_scraping=True, crear_vectorstore_bd=True):
             print("❌ No se pudo crear vectorstore")
             return
     
-    #probar_retriever()
+    probar_retriever()
     
     print("✅ Procesamiento completado")
     print(f"📊 {len(empleos)} empleos procesados")
