@@ -94,11 +94,63 @@ export const mockQueryJobs = async (queryText) => {
   };
 };
 
+// Función para usar el chatbot inteligente con Together.ai
+export const chatWithBot = async (mensaje) => {
+  try {
+    const response = await axios.post(`${BASE_URL}/chat`, {
+      mensaje: mensaje
+    }, {
+      headers: {
+        'Content-Type': 'application/json',
+      }
+    });
+    
+    return {
+      respuesta: response.data.respuesta,
+      empleos: response.data.empleos || null,
+      success: true
+    };
+  } catch (error) {
+    console.error('Error al chatear con el bot:', error);
+    return {
+      respuesta: "Lo siento, hubo un error al procesar tu consulta. Por favor, intenta de nuevo.",
+      success: false
+    };
+  }
+};
+
 // Función principal que decide si usar datos reales o mock
 export const searchJobs = async (queryText) => {
   if (config.USE_MOCK_DATA) {
     return await mockQueryJobs(queryText);
   } else {
     return await queryJobs(queryText);
+  }
+};
+
+// Función para obtener detalles completos de un empleo específico
+export const getJobDetails = async (jobId) => {
+  try {
+    const response = await axios.get(`${BASE_URL}/job/${jobId}`);
+    
+    if (response.data.found) {
+      return {
+        job: response.data.job,
+        success: true
+      };
+    } else {
+      return {
+        job: null,
+        success: false,
+        error: 'Empleo no encontrado'
+      };
+    }
+  } catch (error) {
+    console.error('Error al obtener detalles del empleo:', error);
+    return {
+      job: null,
+      success: false,
+      error: 'Error al conectar con el servidor'
+    };
   }
 };

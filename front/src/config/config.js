@@ -4,7 +4,7 @@ export const config = {
   BACKEND_URL: 'http://localhost:5000',
   
   // Modo de desarrollo - usar datos de prueba
-  USE_MOCK_DATA: false, // Cambiar a false cuando tengas el backend funcionando
+  USE_MOCK_DATA: false, // Ahora usamos el backend real con Groq
   
   // Configuración del chat
   CHAT_CONFIG: {

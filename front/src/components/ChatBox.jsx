@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import JobCard from './JobCard';
 import LoadingSpinner from './LoadingSpinner';
 import SuggestedQueries from './SuggestedQueries';
-import { searchJobs } from '../services/api';
+import { searchJobs, chatWithBot } from '../services/api';
 import config from '../config/config.js';
 import './ChatBox.css';
 
@@ -39,6 +39,25 @@ const ChatBox = () => {
     setInputText('');
 
     try {
+      // Primero intentar usar el chatbot inteligente
+      if (!config.USE_MOCK_DATA) {
+        const chatResponse = await chatWithBot(inputText);
+        
+        if (chatResponse.success) {
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            content: chatResponse.respuesta,
+            jobs: chatResponse.empleos || null, // Incluir empleos si están disponibles
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, botMessage]);
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // Fallback: usar búsqueda directa de empleos
       const response = await searchJobs(inputText);
       
       const botMessage = {
