@@ -251,6 +251,6 @@ def main(hacer_scraping=True, crear_vectorstore_bd=True):
 if __name__ == "__main__":
    
     HACER_SCRAPING = False  # True = hacer scraping, False = usar JSON existente
-    CREAR_VECTORSTORE = False  # True = crear vectorstore, False = solo procesar documentos
+    CREAR_VECTORSTORE = True  # True = crear vectorstore, False = solo procesar documentos
    
     main(hacer_scraping=HACER_SCRAPING, crear_vectorstore_bd=CREAR_VECTORSTORE) 
