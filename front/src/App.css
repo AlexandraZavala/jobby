@@ -1,0 +1,16 @@
+/* Estilos globales para la aplicación Jobly */
+.App {
+  min-height: 100vh;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+/* Reset y estilos base */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background: #f8fafc;
+}

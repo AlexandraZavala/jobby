@@ -1,0 +1,239 @@
+.chat-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  max-width: 900px;
+  margin: 0 auto;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.chat-header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.chat-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.bot-avatar {
+  font-size: 1.5rem;
+}
+
+.chat-title h2 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+}
+
+.chat-status {
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chat-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  background: #4ade80;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.chat-messages {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+}
+
+.message {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.message.user {
+  align-items: flex-end;
+}
+
+.message.bot {
+  align-items: flex-start;
+}
+
+.message-content {
+  max-width: 80%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  position: relative;
+}
+
+.message.user .message-content {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-bottom-right-radius: 4px;
+}
+
+.message.bot .message-content {
+  background: white;
+  color: #2d3748;
+  border: 1px solid #e2e8f0;
+  border-bottom-left-radius: 4px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.message-content p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+.message-time {
+  font-size: 0.75rem;
+  color: #a0aec0;
+  margin-top: 4px;
+  padding: 0 4px;
+}
+
+.jobs-container {
+  margin-top: 12px;
+  width: 100%;
+}
+
+.loading-message .message-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: #f7fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.chat-input-container {
+  padding: 20px;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+}
+
+.input-group {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.chat-input {
+  flex: 1;
+  padding: 12px 16px;
+  border: 2px solid #e2e8f0;
+  border-radius: 12px;
+  font-size: 1rem;
+  resize: none;
+  outline: none;
+  transition: border-color 0.3s ease;
+  font-family: inherit;
+  line-height: 1.5;
+  min-height: 44px;
+  max-height: 120px;
+}
+
+.chat-input:focus {
+  border-color: #667eea;
+}
+
+.chat-input:disabled {
+  background-color: #f7fafc;
+  cursor: not-allowed;
+}
+
+.send-button {
+  padding: 12px 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 1.2rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.send-button:disabled {
+  background: #cbd5e0;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
+}
+
+.input-hint {
+  font-size: 0.8rem;
+  color: #718096;
+  margin-top: 8px;
+  text-align: center;
+}
+
+/* Scrollbar personalizado */
+.chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 3px;
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .chat-container {
+    height: 100vh;
+    border-radius: 0;
+    border: none;
+  }
+  
+  .chat-header {
+    padding: 12px 16px;
+  }
+  
+  .chat-title h2 {
+    font-size: 1.1rem;
+  }
+  
+  .chat-messages {
+    padding: 16px;
+  }
+  
+  .message-content {
+    max-width: 90%;
+  }
+  
+  .chat-input-container {
+    padding: 16px;
+  }
+}
