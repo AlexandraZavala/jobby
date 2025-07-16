@@ -2,6 +2,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import json
+from collections import defaultdict
+from langchain_community.vectorstores import Chroma
+from langchain.embeddings import HuggingFaceEmbeddings
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -43,6 +48,12 @@ class HealthResponse(BaseModel):
     status: str
     message: str
 
+
+# Variables globales
+vectorstore = None
+embeddings = None
+conversaciones = defaultdict(list)
+VECTORSTORE_PATH = "./data/chroma_db"
 # Configuración de APIs
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -66,63 +77,127 @@ def cargar_empleos():
         print("No se encontró jobs_for_chatbot.json")
         return []
 
-def buscar_empleos_relevantes(query: str, empleos: List[dict], max_resultados: int = 3) -> List[dict]:
-    """Busca empleos relevantes basándose en la consulta del usuario"""
-    empleos_relevantes = []
-    palabras_clave = query.lower().split()
-    empleos_vistos = set()  # Para evitar duplicados
+
+def crear_documento_empleo(empleo):
+    """Crea un documento LangChain para un empleo individual"""
     
-    # Palabras clave adicionales para diferentes tipos de empleo
-    keywords_mapping = {
-        'desarrollador': ['developer', 'programador', 'software', 'web', 'frontend', 'backend', 'fullstack'],
-        'analista': ['analyst', 'data', 'business', 'datos'],
-        'marketing': ['marketing', 'digital', 'social media', 'publicidad'],
-        'diseño': ['design', 'diseñador', 'ux', 'ui', 'gráfico'],
-        'ventas': ['sales', 'commercial', 'vendedor'],
-        'python': ['python', 'django', 'flask', 'pandas'],
-        'javascript': ['javascript', 'js', 'react', 'node', 'angular', 'vue'],
-        'java': ['java', 'spring', 'hibernate'],
-        'practicante': ['intern', 'trainee', 'junior', 'estudiante', 'practice']
+    # Función auxiliar para manejar listas con valores None
+    def safe_join_lista(lista, separador=", "):
+        if not lista:
+            return "No especificado"
+        # Filtrar valores None y convertir a string
+        elementos_limpios = [str(item) for item in lista if item is not None and str(item).strip()]
+        return separador.join(elementos_limpios) if elementos_limpios else "No especificado"
+    
+    # Crear contenido del documento
+    contenido = f"""
+    Título: {empleo.get('title', 'Sin título')}
+    Empresa: {empleo.get('company', 'Sin empresa')}
+    Ubicación: {empleo.get('location', 'Sin ubicación')}
+    Tipo de empleo: {empleo.get('job_type', 'Sin especificar')}
+    Salario: {empleo.get('salary_info', 'No especificado')}
+
+    Descripción:
+    {empleo.get('description', 'Sin descripción')}
+
+    Requisitos:
+    {empleo.get('requirements', 'Sin requisitos')}
+
+    Información adicional:
+    - Email: {empleo.get('contact_email', 'No especificado')}
+    - Remoto: {empleo.get('remote_type', 'No especificado')}
+    - Nivel de experiencia: {empleo.get('experience_level', 'No especificado')}
+    - Nivel de educación: {empleo.get('education_level', 'No especificado')}
+    - Carreras requeridas: {safe_join_lista(empleo.get('majors', []))}
+    - Idiomas: {safe_join_lista(empleo.get('languages', []))}
+    - Número de vacantes: {empleo.get('vacancies', 'No especificado')}
+    - Horas por semana: {empleo.get('hours_per_week', 'No especificado')}
+    """
+
+    # Crear metadatos para el documento
+    metadatos = {
+        "id": empleo.get('id', ''),
+        "visual_id": empleo.get('visual_id', ''),
+        "title": empleo.get('title', ''),
+        "company": empleo.get('company', ''),
+        "location": empleo.get('location', ''),
+        "job_type": empleo.get('job_type', ''),
+        "salary_info": empleo.get('salary_info', ''),
+        "contact_email": empleo.get('contact_email', ''),
+        "remote_type": empleo.get('remote_type', ''),
+        "experience_level": empleo.get('experience_level', ''),
+        "education_level": empleo.get('education_level', ''),
+        "majors": safe_join_lista(empleo.get('majors', [])),
+        "languages": safe_join_lista(empleo.get('languages', [])),
+        "vacancies": empleo.get('vacancies', ''),
+        "hours_per_week": empleo.get('hours_per_week', ''),
+        "start_date": empleo.get('start_date', ''),
+        "end_date": empleo.get('end_date', ''),
+        "tipo_documento": "empleo"
     }
     
-    # Expandir palabras clave
-    expanded_keywords = set(palabras_clave)
-    for palabra in palabras_clave:
-        if palabra in keywords_mapping:
-            expanded_keywords.update(keywords_mapping[palabra])
+    return Document(
+        page_content=contenido.strip(),
+        metadata=metadatos
+    )
+
+def crear_y_guardar_vectorstore():
+    """Crea y guarda el vectorstore"""
+    empleos = cargar_empleos()
+    documentos = [crear_documento_empleo(e) for e in empleos]
+
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100,length_function=len,
+            separators=["\n\n", "\n", " ", ""])
+    chunks = splitter.split_documents(documentos)
+
+    vectorstore = Chroma.from_documents(
+        chunks,
+        embedding=embeddings,
+        persist_directory=VECTORSTORE_PATH
+    )
+    vectorstore.persist()
+    print(f"Vectorstore creado con {len(chunks)} chunks.")
+    return vectorstore
+
+def inicializar_vectorstore():
+    """Inicializa el vectorstore con los empleos"""
+    global vectorstore, embeddings
     
-    for empleo in empleos:
-        # Crear una clave única para evitar duplicados
-        empleo_key = f"{empleo.get('title', '')}-{empleo.get('company', '')}"
-        if empleo_key in empleos_vistos:
-            continue
-        
-        titulo = empleo.get('title', '').lower()
-        descripcion = empleo.get('description', '').lower()
-        empresa = empleo.get('company', '').lower()
-        ubicacion = empleo.get('location', '').lower()
-        
-        # Calcular relevancia
-        relevancia = 0
-        for keyword in expanded_keywords:
-            if keyword in titulo:
-                relevancia += 3  # Título tiene más peso
-            if keyword in descripcion:
-                relevancia += 2
-            if keyword in empresa:
-                relevancia += 1
-            if keyword in ubicacion:
-                relevancia += 1
-        
-        if relevancia > 0:
-            empleo_copia = empleo.copy()
-            empleo_copia['relevancia'] = relevancia
-            empleos_relevantes.append(empleo_copia)
-            empleos_vistos.add(empleo_key)
+    print("Inicializando vectorstore...")
     
-    # Ordenar por relevancia y retornar los mejores
-    empleos_relevantes.sort(key=lambda x: x['relevancia'], reverse=True)
-    return empleos_relevantes[:max_resultados]
+    # Inicializar embeddings
+    embeddings = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+    )
+    
+    # Cargar o crear vectorstore
+    try:
+        vectorstore = Chroma(
+            persist_directory=VECTORSTORE_PATH,
+            embedding_function=embeddings
+        )
+        cantidad_vectores = vectorstore._collection.count()
+        if cantidad_vectores == 0:
+            print("Vectorstore existente pero vacío. Reconstruyendo...")
+            vectorstore = crear_y_guardar_vectorstore()
+        else:
+            print(f"Vectorstore cargado con {cantidad_vectores} vectores.")
+    except Exception as e:
+        print(f"Error al cargar vectorstore: {e}")
+        print("Generando uno nuevo...")
+        vectorstore = crear_y_guardar_vectorstore()
+    
+    # Verificar cuántos documentos tiene
+    try:
+        cantidad = vectorstore._collection.count()
+        print(f"El vectorstore contiene {cantidad} vectores")
+        return True
+    except Exception as e:
+        print(f"No se pudo contar los vectores: {e}")
+        return False
+
+
+
 
 def generar_con_groq(prompt: str, modelo: str = "llama-3.1-8b-instant") -> str:
     """Genera texto usando Groq (súper rápido y gratis!)"""
@@ -158,6 +233,7 @@ def generar_con_openai(prompt: str, modelo: str = "gpt-3.5-turbo") -> str:
         print(f"Error con OpenAI: {e}")
         raise e
 
+
 @app.get("/", response_model=HealthResponse)
 async def root():
     """Endpoint raíz"""
@@ -165,6 +241,14 @@ async def root():
         status="OK", 
         message="Jobby API funcionando correctamente"
     )
+@app.on_event("startup")
+async def startup_event():
+    """Inicializar vectorstore al iniciar el servidor"""
+    print("Iniciando servidor FastAPI...")
+    if inicializar_vectorstore():
+        print("Servidor listo para recibir consultas")
+    else:
+        print("Error inicializando vectorstore")
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
@@ -186,19 +270,45 @@ async def chat(request: ChatRequest):
         # Cargar empleos para contexto
         empleos = cargar_empleos()
         
-        # Buscar empleos relevantes
-        empleos_relevantes = buscar_empleos_relevantes(pregunta, empleos, max_resultados=3)
+        # Buscar empleos relevantes usando vectorstore
+        if vectorstore is None:
+            raise HTTPException(status_code=500, detail="Vectorstore no inicializado")
         
-        # Si no hay ninguna API configurada, respuesta simple pero útil
-        if not groq_client and not openai_client:
-            # Crear respuesta simple
-            if empleos_relevantes:
-                respuesta = f"Encontré {len(empleos_relevantes)} empleos relevantes para tu búsqueda. ¿Te interesan o necesitas algo más específico?"
-            else:
-                respuesta = f"Revisé nuestras {len(empleos)} ofertas disponibles. ¿Podrías ser más específico sobre el tipo de trabajo que buscas?"
-                empleos_relevantes = empleos[:3]  # Mostrar algunos empleos por defecto
+        documentos_relevantes = vectorstore.similarity_search(pregunta, k=3)
+        
+        # Convertir Documents a diccionarios para que funcione con Pydantic
+        empleos_relevantes = []
+        empleos_originales = cargar_empleos()  # Cargar empleos originales
+        
+        for doc in documentos_relevantes:
+            # Buscar el empleo original por ID para obtener todos los datos
+            empleo_original = None
+            empleo_id = doc.metadata.get("id", "")
             
-            return ChatResponse(respuesta=respuesta, empleos=empleos_relevantes)
+            for emp in empleos_originales:
+                if emp.get("id") == empleo_id:
+                    empleo_original = emp
+                    break
+            
+            if empleo_original:
+                # Usar el empleo original completo
+                empleos_relevantes.append(empleo_original)
+            else:
+                # Crear diccionario desde metadatos si no encontramos el original
+                empleo_dict = {
+                    "title": doc.metadata.get("title", "Sin título"),
+                    "company": doc.metadata.get("company", "Sin empresa"),
+                    "location": doc.metadata.get("location", "Sin ubicación"),
+                    "id": doc.metadata.get("id", ""),
+                    "visual_id": doc.metadata.get("visual_id", ""),
+                    "job_type": doc.metadata.get("job_type", ""),
+                    "salary_info": doc.metadata.get("salary_info", ""),
+                    "description": "Descripción no disponible",
+                    "requirements": ""
+                }
+                empleos_relevantes.append(empleo_dict)
+
+        #print(empleos_relevantes)
 
         # Crear contexto con empleos relevantes
         contexto = ""
@@ -231,16 +341,20 @@ Eres un asesor laboral profesional y conciso.
 
 Pregunta del usuario: {pregunta}
 
+Contexto: {contexto}
+
 Empleos encontrados: {len(empleos_relevantes)} ofertas relevantes
 
 Instrucciones:
-- Responde en máximo 2 oraciones cortas
+- Responde en máximo 2 oraciones cortas. Con un resumen de lo que encontraste.
+- Si no hay empleos relevantes, sugiere buscar con otras palabras clave.
 - NO repitas los detalles de los empleos (título, empresa, ubicación) porque ya se muestran en las tarjetas
 - Solo da un consejo breve y útil
 - Pregunta si necesita ayuda con algo específico
 - Sé directo y no redundante
+- SOLO TE ENCARGAS DE RESPONDER EN BASE A LA INFORMACION QUE ENCONTRASTE, NO OFREZCAS OTROS SERVICIOS, SOLO DAS INFORMACION SOBRE LOS EMPLEOS ENCONTRADOS
+- SOLO RESUME LO QUE ENCONTRASTE Y NO PREGUNTES O TE OFREZCAS A AYUDAR CON ALGO MÁS, SOLO RESPONDE A LA PREGUNTA DEL USUARIO
 
-Ejemplo de respuesta: "Encontré 3 empleos de análisis de datos que podrían interesarte. Te recomiendo revisar los requisitos de cada uno. ¿Te gustaría que busque algo más específico?"
 """
 
         # Prioridad: Groq (gratis y rápido) > OpenAI > Fallback

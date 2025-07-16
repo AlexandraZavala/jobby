@@ -109,7 +109,7 @@ const ChatBox = () => {
       <div className="chat-header">
         <div className="chat-title">
           <span className="bot-avatar">🤖</span>
-          <h2>Jobly - Asistente de Empleos</h2>
+          <h2>Jobly - Asistente de la Bolsa de Trabajo PUCP</h2>
         </div>
         <div className="chat-status">En línea</div>
       </div>

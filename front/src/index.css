@@ -20,19 +20,22 @@ html, body {
   margin: 0;
   padding: 0;
   height: 100%;
+  overflow: hidden;
 }
 
 #root {
-  min-height: 100vh;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 body {
   margin: 0;
   place-items: center;
   min-width: 320px;
-  min-height: 100vh;
+  height: 100vh; 
+  overflow: hidden;
 }
 
 h1 {
