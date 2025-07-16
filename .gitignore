@@ -1,2 +1,11 @@
 .env
 chroma_db/
+# Ignorar archivos de configuración de ChromaDB
+*.db
+
+front/node_modules/
+# Ignorar dependencias de Node.js del frontend
+front/.next/
+back/__pycache__/
+back/*.pyc
+back/*.cpython-313.pyc

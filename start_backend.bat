@@ -28,5 +28,5 @@ echo Documentación automática en: http://localhost:5000/docs
 echo Endpoint de chat inteligente: POST http://localhost:5000/chat
 echo.
 
-uvicorn app:app --host 0.0.0.0 --port 5000 --reload
+uvicorn app_simple:app --host 0.0.0.0 --port 5000 --reload
 pause

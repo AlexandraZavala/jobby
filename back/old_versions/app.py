@@ -160,7 +160,8 @@ def crear_y_guardar_vectorstore():
     empleos = cargar_empleos()
     documentos = [crear_documento_empleo(e) for e in empleos]
 
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100,length_function=len,
+            separators=["\n\n", "\n", " ", ""])
     chunks = splitter.split_documents(documentos)
 
     vectorstore = Chroma.from_documents(
@@ -285,14 +286,21 @@ async def chat(request: ChatRequest):
         # Buscar los 3 documentos más relevantes
         resultados = vectorstore.similarity_search(pregunta, k=3)
         contexto = "\n\n".join([doc.page_content for doc in resultados])
+        print(f"Contexto encontrado: {contexto[:200]}...")  # Mostrar solo los primeros 200 caracteres para depuración
 
         # Construir prompt contextual (igual que en main2.py)
         prompt = f"""
 Eres un asesor laboral profesional y amable. Tienes acceso a una lista de ofertas laborales relevantes extraídas de una base de datos.
 
-Debes responder exclusivamente usando esa información. Si el usuario pregunta por las carreras profesionales para las cuales hay empleos disponibles, analiza los campos 'carreras requeridas' o 'majors' de las ofertas y menciona solo los nombres de las carreras que aparecen.
+Debes responder exclusivamente usando esa información. 
+
+Solo si el usuario pregunta por las carreras profesionales para las cuales hay empleos disponibles, analiza los campos 'carreras requeridas' o 'majors' de las ofertas y menciona solo los nombres de las carreras que aparecen.
 
 Luego, pregúntale si le gustaría conocer más detalles sobre alguna de esas opciones.
+
+Si el usuario pregunta por algo que no tienen nada que ver con ofertas laborales, responde que no tienes información sobre eso.
+
+Solo responde con información relacionada con las ofertas laborales. Usa el idioma español, si el usuario usa otro idioma no respondas.
 
 Ofertas laborales encontradas:
 

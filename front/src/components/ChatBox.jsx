@@ -6,6 +6,7 @@ import { searchJobs, chatWithBot } from '../services/api';
 import config from '../config/config.js';
 import './ChatBox.css';
 
+
 const ChatBox = () => {
   const [messages, setMessages] = useState([
     {

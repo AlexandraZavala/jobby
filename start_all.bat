@@ -10,7 +10,7 @@ pip install -r requirements.txt
 
 echo.
 echo 2. Iniciando servidor FastAPI...
-start cmd /k "uvicorn app:app --host 0.0.0.0 --port 5000 --reload"
+start cmd /k "uvicorn app_simple:app --host 0.0.0.0 --port 5000 --reload"
 
 echo.
 echo 3. Esperando 5 segundos para que inicie el backend...
