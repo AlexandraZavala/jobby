@@ -16,7 +16,7 @@ start_all.bat
 ```bash
 cd back
 pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 5000 --reload
+uvicorn app_simple:app --host 0.0.0.0 --port 5000 --reload
 ```
 
 #### Frontend (React + Vite)

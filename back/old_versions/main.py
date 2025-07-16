@@ -7,6 +7,13 @@ from langchain.schema import Document
 import subprocess
 import sys
 
+"""
+
+Primera version del backend, para probar la busqueda semántica usando RAG, con una funcion con parametros
+para hacer scraping o usar los datos ya formateados.
+
+"""
+
 def ejecutar_scraping():
     """Ejecuta el script de scraping"""
     print("🚀 Iniciando scraping...")
