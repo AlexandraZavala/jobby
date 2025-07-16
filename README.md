@@ -118,9 +118,9 @@ Crea un archivo `.env` en la carpeta `back/`:
 OPENAI_API_KEY=tu_api_key_de_openai_aqui
 GROQ_API_KEY=tu_api_key_de_groq_aqui
 
-# Para web scraping de LinkedIn
-EMAIL=tu_email@ejemplo.com
-PASSWORD=tu_contraseña_linkedin
+# Para web scraping de Bolsa PUCP
+EMAIL=tu_usuario
+PASSWORD=tu_contraseña
 ```
 
 ### 2. APIs Disponibles
