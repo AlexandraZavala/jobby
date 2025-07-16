@@ -93,6 +93,21 @@ const JobDetailModal = ({ jobId, isOpen, onClose }) => {
                 </div>
               </div>
 
+              {jobId && (
+                <div className="job-detail-section">
+                  <h4>🔗 Link</h4>
+                  <a
+                    className="job-full-description text-blue-500 underline"
+                    href={`https://pucp-csm.symplicity.com/students/app/jobs/detail/${jobId}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {/* https://pucp-csm.symplicity.com/students/app/jobs/detail/{jobId} */}
+                    Ver oferta completa
+                  </a>
+                </div>
+              )}
+              
               <div className="job-detail-section">
                 <h4>📋 Descripción del puesto</h4>
                 <p className="job-full-description">

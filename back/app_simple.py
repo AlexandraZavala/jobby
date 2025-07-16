@@ -207,6 +207,7 @@ async def chat(request: ChatRequest):
                 contexto += f"""
 Empleo {i+1}:
 - Título: {empleo.get('title', 'Sin título')}
+- ID: {empleo.get('id', '')}
 - Empresa: {empleo.get('company', 'Sin empresa')}
 - Ubicación: {empleo.get('location', 'Sin ubicación')}
 - Descripción: {empleo.get('description', 'Sin descripción')[:300]}...
@@ -217,6 +218,7 @@ Empleo {i+1}:
                 contexto += f"""
 Empleo {i+1}:
 - Título: {empleo.get('title', 'Sin título')}
+- ID: {empleo.get('id', '')}
 - Empresa: {empleo.get('company', 'Sin empresa')}
 - Ubicación: {empleo.get('location', 'Sin ubicación')}
 - Descripción: {empleo.get('description', 'Sin descripción')[:300]}...
