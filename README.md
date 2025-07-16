@@ -1,22 +1,28 @@
-# Jobby - Sistema de Búsqueda Inteligente de Empleos
+# TRY3 - Sistema de Búsqueda Inteligente de Empleos
 
-Este proyecto conecta un backend de FastAPI con LangChain para búsqueda semántica de empleos, con un frontend en React.
+Sistema completo de búsqueda de empleos que incluye web scraping de LinkedIn, API inteligente con FastAPI, y frontend interactivo en React.
 
-## Inicio Rápido
+## 🚀 Inicio Rápido
 
-### Opción 1: Iniciar ambos servicios automáticamente
+### Opción 1: Iniciar todo automáticamente
 ```bash
-# Ejecuta este archivo para iniciar backend y frontend
+# Ejecuta ambos servicios (backend + frontend)
 start_all.bat
+
+# Solo backend
+start_backend.bat
+
+# Solo scraper de empleos
+start_scraper.bat
 ```
 
-### Opción 2: Iniciar servicios por separado
+### Opción 2: Iniciar servicios manualmente
 
 #### Backend (FastAPI)
 ```bash
 cd back
 pip install -r requirements.txt
-uvicorn app_simple:app --host 0.0.0.0 --port 5000 --reload
+python app_simple.py
 ```
 
 #### Frontend (React + Vite)
@@ -26,126 +32,217 @@ npm install
 npm run dev
 ```
 
-## Endpoints de la API
+#### Scraper de Empleos
+```bash
+cd back
+python scrapping/scrap_all.py
+```
+
+## 🛠️ Estructura del Proyecto
+
+```
+TRY3/
+├── back/                           # Backend FastAPI
+│   ├── app_simple.py              # API principal con chatbot
+│   ├── requirements.txt           # Dependencias Python
+│   ├── .env                       # Variables de entorno
+│   ├── scrapping/                 # Sistema de web scraping
+│   │   ├── scrap_all.py          # Scraper principal (LinkedIn)
+│   │   ├── alljobs_scrap.py      # Extractor de listado de empleos
+│   │   └── detailedjobs_scrap.py # Extractor de detalles
+│   ├── old_versions/              # Versiones anteriores
+│   │   ├── app.py                # API con LangChain completo
+│   │   ├── main.py               # Implementación original
+│   │   └── main2.py              # Versión con Twilio
+│   ├── data/                      # Datos de ChromaDB
+│   │   └── chroma_db/
+│   ├── jobs_raw.json             # Empleos extraídos (crudo)
+│   ├── detalles_empleos.json     # Detalles completos
+│   └── jobs_for_chatbot.json     # Datos formateados para API
+├── front/                         # Frontend React
+│   ├── src/
+│   │   ├── components/           # Componentes React
+│   │   │   ├── ChatBox.jsx      # Chat principal
+│   │   │   ├── JobCard.jsx      # Tarjeta de empleo
+│   │   │   ├── JobDetailModal.jsx # Modal de detalles
+│   │   │   ├── LoadingSpinner.jsx # Spinner de carga
+│   │   │   └── SuggestedQueries.jsx # Consultas sugeridas
+│   │   ├── pages/
+│   │   │   └── HomePage.jsx     # Página principal
+│   │   ├── services/
+│   │   │   └── api.js           # Llamadas a la API
+│   │   └── config/
+│   │       └── config.js        # Configuración
+│   ├── package.json
+│   └── vite.config.js
+├── start_all.bat                  # Inicia backend + frontend
+├── start_backend.bat             # Solo backend
+├── start_scraper.bat             # Solo scraper
+└── README.md                     # Esta documentación
+```
+
+## 📡 API Endpoints
 
 ### Base URL: `http://localhost:5000`
 
-#### 1. Health Check
-- **GET** `/health`
-- Verifica que el servidor esté funcionando
-
-#### 2. Chat Inteligente (NUEVO)
+#### 1. Chatbot Inteligente
 - **POST** `/chat`
 - Body: `{"mensaje": "tu pregunta aquí"}`
-- Retorna una respuesta conversacional del asesor laboral usando IA
+- Respuesta: `{"respuesta": "...", "empleos": [...]}`
+- Utiliza OpenAI o Groq para respuestas inteligentes
 
-#### 3. Búsqueda de Empleos
-- **POST** `/query_jobs`
-- Body: `{"query": "tu búsqueda aquí"}`
-- Retorna empleos relevantes usando búsqueda semántica
+#### 2. Detalles de Empleo
+- **GET** `/job/{job_id}`
+- Retorna detalles completos de un empleo específico
 
-#### 4. Obtener Todos los Empleos
+#### 3. Todos los Empleos
 - **GET** `/get_all_jobs`
 - Retorna todos los empleos disponibles
+
+#### 4. Health Check
+- **GET** `/health`
+- Verifica que el servidor esté funcionando
 
 #### 5. Documentación Automática
 - **GET** `/docs` - Swagger UI
 - **GET** `/redoc` - ReDoc
 
-## Configuración
+## ⚙️ Configuración
 
-### Variables de Entorno (Importante)
+### 1. Variables de Entorno
 
-1. **Configura una API key** en la carpeta `back/.env`:
+Crea un archivo `.env` en la carpeta `back/`:
 
-   **Opción 1: OpenAI (Recomendado)**
-   ```
-   OPENAI_API_KEY=tu_api_key_de_openai_aqui
-   ```
-   - Ve a https://platform.openai.com/api-keys
-   - Crea una cuenta (tiene plan gratuito)
-   - Genera una API key
-   - Cópiala en el archivo `.env`
+```env
+# Para el chatbot inteligente (elige una)
+OPENAI_API_KEY=tu_api_key_de_openai_aqui
+GROQ_API_KEY=tu_api_key_de_groq_aqui
 
-   **Opción 2: Together.ai (Alternativo)**
-   ```
-   TOGETHER_API_KEY=tu_api_key_de_together_aqui
-   ```
-   - Ve a https://together.ai/
-   - Crea una cuenta gratuita
-   - Obtén tu API key
+# Para web scraping de LinkedIn
+EMAIL=tu_email@ejemplo.com
+PASSWORD=tu_contraseña_linkedin
+```
 
-2. **El sistema usa prioridades**:
-   - Si tienes OpenAI → Usa ChatGPT
-   - Si no hay OpenAI pero hay Together.ai → Usa Together.ai
-   - Si no hay ninguna → Chat deshabilitado
+### 2. APIs Disponibles
 
-### Backend
-El backend se inicializa automáticamente y:
-1. Carga los empleos desde `jobs_for_chatbot.json`
-2. Crea embeddings con HuggingFace
-3. Inicializa ChromaDB para búsqueda vectorial
-4. Configura el chatbot inteligente (OpenAI ChatGPT preferido, Together.ai como backup)
+**Prioridad para el chatbot:**
+1. **Groq** (Gratuito y rápido) - Recomendado
+2. **OpenAI** (Potente pero de pago)
+3. **Fallback** sin IA (respuestas simples)
 
-### Frontend
-- Backend URL: `http://localhost:5000`
-- Frontend URL: `http://localhost:5173`
-- Modo mock: Desactivado (usa backend real)
-- Chat inteligente: Activado cuando hay API key configurada
+**Para obtener API keys:**
+- **Groq**: https://groq.com/ (Gratuito)
+- **OpenAI**: https://platform.openai.com/api-keys
 
-## Uso
+### 3. Dependencias
 
-1. Inicia ambos servicios con `start_all.bat`
-2. Ve a `http://localhost:5173`
-3. Escribe tu búsqueda de empleo
-4. ¡El sistema te mostrará empleos relevantes!
+#### Backend
+```bash
+cd back
+pip install fastapi uvicorn python-dotenv openai groq selenium webdriver-manager
+```
 
-## Troubleshooting
+#### Frontend
+```bash
+cd front
+npm install
+```
 
-### Error: "Vectorstore no inicializado"
-- Asegúrate de que `jobs_for_chatbot.json` exista en `/back`
-- Verifica que las dependencias estén instaladas correctamente
+## 🔄 Flujo de Trabajo
+
+### 1. Extracción de Datos (Scraping)
+```bash
+# Ejecutar scraper
+start_scraper.bat
+
+# Archivos generados:
+# - jobs_raw.json (datos crudos)
+# - detalles_empleos.json (detalles completos)  
+# - jobs_for_chatbot.json (datos para API)
+```
+
+### 2. Ejecutar API
+```bash
+# Backend carga automáticamente jobs_for_chatbot.json
+start_backend.bat
+```
+
+### 3. Usar Frontend
+```bash
+# Frontend conecta automáticamente con el backend
+# Ve a http://localhost:5173
+```
+
+## 🌟 Características
+
+### Web Scraping
+- ✅ Extracción automática de empleos de LinkedIn
+- ✅ Selenium en modo headless
+- ✅ Manejo automático de ChromeDriver
+- ✅ Extracción de detalles completos
+
+### API Inteligente  
+- ✅ Chatbot conversacional con IA
+- ✅ Búsqueda semántica de empleos
+- ✅ Respuestas contextuales
+- ✅ Múltiples proveedores de IA
+
+### Frontend Moderno
+- ✅ Interfaz React moderna
+- ✅ Chat en tiempo real
+- ✅ Tarjetas de empleos interactivas
+- ✅ Modal de detalles completos
+- ✅ Consultas sugeridas
+
+## 🐛 Troubleshooting
+
+### Error: "No se encuentra jobs_for_chatbot.json"
+- Ejecuta el scraper primero: `start_scraper.bat`
+
+### Error: "No se encuentra .env"
+- Crea el archivo `.env` en `back/` con las credenciales
+
+### Error de Chrome/Selenium
+- El sistema instala ChromeDriver automáticamente
+- Asegúrate de tener Chrome instalado
+
+### Error de puerto ocupado
+- Backend: Cambia el puerto en `app_simple.py`
+- Frontend: Cambia en `vite.config.js`
 
 ### Error de CORS
-- El backend está configurado para permitir conexiones desde localhost:3000 y localhost:5173
+- El backend está configurado para localhost:3000 y localhost:5173
 
-### Puerto en uso
-- Cambia el puerto en `app.py` si 5000 está ocupado
-- Actualiza la URL en `front/src/config/config.js`
+## 💻 URLs del Sistema
 
-## Tecnologías
+- **Frontend**: http://localhost:5173
+- **API Backend**: http://localhost:5000
+- **Documentación API**: http://localhost:5000/docs
+- **ReDoc**: http://localhost:5000/redoc
+
+## 🔧 Tecnologías
 
 ### Backend
-- FastAPI
-- LangChain  
-- ChromaDB (vector database)
-- HuggingFace Embeddings
-- OpenAI ChatGPT (principal)
-- Together.ai (backup)
-- Uvicorn
+- **FastAPI** - Framework web
+- **OpenAI/Groq** - Inteligencia artificial
+- **Selenium** - Web scraping
+- **Python-dotenv** - Variables de entorno
 
-### Frontend
-- React
-- Vite
-- Axios
+### Frontend  
+- **React** - Framework UI
+- **Vite** - Build tool
+- **CSS3** - Estilos modernos
 
-## Estructura del Proyecto
+### Scraping
+- **Selenium WebDriver** - Automatización web
+- **ChromeDriver** - Navegador headless
+- **LinkedIn** - Fuente de datos
 
-```
-jobby/
-├── back/
-│   ├── app.py              # Servidor FastAPI con chat inteligente
-│   ├── main2.py            # Implementación original con Twilio
-│   ├── .env                # Variables de entorno (API keys)
-│   ├── requirements.txt    # Dependencias Python
-│   ├── data/               # Datos del vectorstore
-│   └── ...
-├── front/
-│   ├── src/
-│   │   ├── components/     # Componentes React
-│   │   ├── services/       # API calls (incluye chatWithBot)
-│   │   └── config/         # Configuración
-│   └── ...
-├── start_all.bat          # Inicia ambos servicios
-└── start_backend.bat      # Solo backend
-```
+---
+
+## 📝 Notas de Desarrollo
+
+- El proyecto usa `app_simple.py` como API principal
+- Las versiones anteriores están en `old_versions/`
+- El scraper funciona en modo headless (sin ventana)
+- Los datos se almacenan en archivos JSON locales
