@@ -1,275 +1,180 @@
-# main.py
-
 import os
-from click import prompt
 import uvicorn
-from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from langchain_community.vectorstores import Chroma
-import requests
-from collections import defaultdict  # 👈 AQUÍ
-from dotenv import load_dotenv
 import json
+from fastapi import FastAPI, Form
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
+from twilio.twiml.messaging_response import MessagingResponse
+from langchain_community.vectorstores import Chroma
 from langchain.schema import Document
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import Chroma
-from langchain.embeddings import HuggingFaceEmbeddings
-from fastapi.responses import PlainTextResponse
+from langchain_community.embeddings import HuggingFaceEmbeddings
+from collections import defaultdict
+from dotenv import load_dotenv
+from groq import Groq
 
-
+# ===================== CONFIGURACIÓN =====================
 load_dotenv()
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+if not GROQ_API_KEY:
+    raise ValueError("No se encontró GROQ_API_KEY en el .env")
+client = Groq(api_key=GROQ_API_KEY)
+
+VECTORSTORE_PATH = "./data/chroma_db_jobs"
+
+# Conversaciones en memoria: historial y contexto
+conversaciones = defaultdict(lambda: {
+    "historial": [],
+    "ultimo_contexto": [],
+    "ofertas": []
+})
+
+embedding_model = HuggingFaceEmbeddings(
+    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+)
+
+SYSTEM_PROMPT = """
+Eres "Jobly", un asesor laboral de la Bolsa de trabajo PUCP virtual amigable, proactivo y muy servicial. Tu objetivo principal es ayudar a los usuarios a encontrar ofertas de empleo que se ajusten a su perfil, utilizando EXCLUSIVAMENTE la información de las ofertas de trabajo que se te proporcionan en el contexto.
+
+Tu personalidad:
+- Amable y cercano: Usa un tono conversacional y empático. Tutea al usuario.
+- Profesional y preciso: Basa TODAS tus respuestas en los datos proporcionados. NUNCA inventes información, sueldos, requisitos o detalles que no estén en el contexto. Si no tienes la información, di amablemente que no la encuentras en la oferta.
+- Orientador: No te limites a listar empleos. Anima al usuario, resalta los puntos clave de una oferta y guíalo en su búsqueda.
+
+Cómo debes actuar:
+1.  Al iniciar una conversación o una nueva búsqueda, saluda cordialmente y presenta los resultados de forma clara y resumida. Puedes usar listas o viñetas con emojis para que sea más legible, de se preferente tambien pidele su nombre y recuerdalo.
+2.  Si el usuario hace una pregunta de seguimiento sobre una oferta que ya mencionaste (ej: "dame más detalles de la primera"), usa el contexto que ya tienes para responder en detalle sobre esa oferta específica.
+3.  Si la información solicitada (ej: "email de contacto") no está en la descripción de la oferta, indícalo claramente. Ejemplo: "En los detalles de esta oferta no se especifica un email de contacto, pero puedes postular a través de su web".
+4.  Si no encuentras ninguna oferta que coincida con la búsqueda, sé honesto y ofrécete a intentar con otros términos. Ejemplo: "Hola, de momento no he encontrado ofertas para 'físico nuclear'. ¿Te gustaría que buscara por otro puesto o habilidad?".
+5.  Mantén las respuestas concisas y adaptadas para WhatsApp, pero sin perder la calidez.
+"""
+
+# ===================== FUNCIONES AUXILIARES =====================
 def cargar_empleos():
     with open("jobs_for_chatbot.json", "r", encoding="utf-8") as f:
         return json.load(f)
 
+def safe_join_lista(lista, separador=", "):
+    if not lista:
+        return "No especificado"
+    elementos_limpios = [str(item) for item in lista if item and str(item).strip()]
+    return separador.join(elementos_limpios) if elementos_limpios else "No especificado"
+
 def crear_documento_empleo(empleo):
-    """Crea un documento LangChain para un empleo individual"""
-    
-    # Función auxiliar para manejar listas con valores None
-    def safe_join_lista(lista, separador=", "):
-        if not lista:
-            return "No especificado"
-        # Filtrar valores None y convertir a string
-        elementos_limpios = [str(item) for item in lista if item is not None and str(item).strip()]
-        return separador.join(elementos_limpios) if elementos_limpios else "No especificado"
-    
-    # Crear contenido del documento
     contenido = f"""
-    Título: {empleo.get('title', 'Sin título')}
-    Empresa: {empleo.get('company', 'Sin empresa')}
-    Ubicación: {empleo.get('location', 'Sin ubicación')}
-    Tipo de empleo: {empleo.get('job_type', 'Sin especificar')}
-    Salario: {empleo.get('salary_info', 'No especificado')}
-
-    Descripción:
-    {empleo.get('description', 'Sin descripción')}
-
-    Requisitos:
-    {empleo.get('requirements', 'Sin requisitos')}
-
-    Información adicional:
-    - Email: {empleo.get('contact_email', 'No especificado')}
-    - Remoto: {empleo.get('remote_type', 'No especificado')}
-    - Nivel de experiencia: {empleo.get('experience_level', 'No especificado')}
-    - Nivel de educación: {empleo.get('education_level', 'No especificado')}
-    - Carreras requeridas: {safe_join_lista(empleo.get('majors', []))}
-    - Idiomas: {safe_join_lista(empleo.get('languages', []))}
-    - Número de vacantes: {empleo.get('vacancies', 'No especificado')}
-    - Horas por semana: {empleo.get('hours_per_week', 'No especificado')}
-    """
-
-    # Crear metadatos para el documento
-    metadatos = {
-        "id": empleo.get('id', ''),
-        "visual_id": empleo.get('visual_id', ''),
-        "title": empleo.get('title', ''),
-        "company": empleo.get('company', ''),
-        "location": empleo.get('location', ''),
-        "job_type": empleo.get('job_type', ''),
-        "salary_info": empleo.get('salary_info', ''),
-        "contact_email": empleo.get('contact_email', ''),
-        "remote_type": empleo.get('remote_type', ''),
-        "experience_level": empleo.get('experience_level', ''),
-        "education_level": empleo.get('education_level', ''),
-        "majors": safe_join_lista(empleo.get('majors', [])),  # Convertir lista a string
-        "languages": safe_join_lista(empleo.get('languages', [])),  # Convertir lista a string
-        "vacancies": empleo.get('vacancies', ''),
-        "hours_per_week": empleo.get('hours_per_week', ''),
-        "start_date": empleo.get('start_date', ''),
-        "end_date": empleo.get('end_date', ''),
-        "tipo_documento": "empleo"
-    }
-    
-    return Document(
-        page_content=contenido.strip(),
-        metadata=metadatos
-    )
-
-
-# 🔁 Historial de conversación en memoria (temporal)
-conversaciones = defaultdict(list)
-
-# Cargar clave de API de Together.ai desde variables de entorno
-TOGETHER_API_KEY = os.getenv("TOGETHER_API_KEY")
-
-# Inicializar FastAPI
-app = FastAPI()
-
-@app.get("/")
-async def root():
-    return {"mensaje": "Bot Jobly funcionando"}
-
-# CORS (si quieres conectar con frontend o Twilio)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Cambia esto en producción
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Cargar embeddings y vectorstore
-print("🔍 Cargando vectorstore...")
-embedding_model = HuggingFaceEmbeddings(
-    model_name="sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
-)
-import os
-
-VECTORSTORE_PATH = "./data/chroma_db"
+Título: {empleo.get('title', 'Sin título')}
+Empresa: {empleo.get('company', 'Sin empresa')}
+Ubicación: {empleo.get('location', 'Sin ubicación')}
+Tipo: {empleo.get('job_type', 'Sin especificar')}
+Salario: {empleo.get('salary_info', 'No especificado')}
+Descripción: {empleo.get('description', 'Sin descripción')}
+Requisitos: {empleo.get('requirements', 'Sin requisitos')}
+Email: {empleo.get('contact_email', 'No especificado')}
+Modalidad: {empleo.get('remote_type', 'No especificado')}
+Experiencia: {empleo.get('experience_level', 'No especificado')}
+Educación: {empleo.get('education_level', 'No especificado')}
+Carreras: {safe_join_lista(empleo.get('majors', []))}
+Idiomas: {safe_join_lista(empleo.get('languages', []))}
+Vacantes: {empleo.get('vacancies', 'No especificado')}
+"""
+    return Document(page_content=contenido.strip(), metadata=empleo)
 
 def crear_y_guardar_vectorstore():
+    print("🛠 Creando base vectorial...")
     empleos = cargar_empleos()
     documentos = [crear_documento_empleo(e) for e in empleos]
-
-    splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)
     chunks = splitter.split_documents(documentos)
-
-    vectorstore = Chroma.from_documents(
-        chunks,
-        embedding=embedding_model,
-        persist_directory=VECTORSTORE_PATH
-    )
+    os.makedirs(VECTORSTORE_PATH, exist_ok=True)
+    vectorstore = Chroma.from_documents(chunks, embedding=embedding_model, persist_directory=VECTORSTORE_PATH)
     vectorstore.persist()
     print(f"✅ Vectorstore creado con {len(chunks)} chunks.")
     return vectorstore
 
-# 💡 Cargar o reconstruir según el número real de vectores
-try:
-    vectorstore = Chroma(
-        persist_directory=VECTORSTORE_PATH,
-        embedding_function=embedding_model
-    )
-    cantidad_vectores = vectorstore._collection.count()
-    if cantidad_vectores == 0:
-        print("⚠️ Vectorstore existente pero vacío. Reconstruyendo...")
-        vectorstore = crear_y_guardar_vectorstore()
-    else:
-        print(f"✅ Vectorstore cargado con {cantidad_vectores} vectores.")
-except Exception as e:
-    print(f"⚠️ Error al cargar vectorstore: {e}")
-    print("🛠 Generando uno nuevo...")
-    vectorstore = crear_y_guardar_vectorstore()
+def cargar_vectorstore():
+    if not os.path.exists(VECTORSTORE_PATH) or not os.listdir(VECTORSTORE_PATH):
+        return crear_y_guardar_vectorstore()
+    vectorstore = Chroma(persist_directory=VECTORSTORE_PATH, embedding_function=embedding_model)
+    return vectorstore
 
-
-# Verifica cuántos documentos tiene
-try:
-    cantidad = vectorstore._collection.count()
-    print(f"📊 El vectorstore contiene {cantidad} vectores")
-except Exception as e:
-    print(f"⚠️ No se pudo contar los vectores: {e}")
-
-
-# Función para generar texto con Together.ai
-def generar_con_together(prompt: str, modelo: str = "mistralai/Mixtral-8x7B-Instruct-v0.1") -> str:
-    url = "https://api.together.xyz/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {TOGETHER_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    payload = {
-        "model": modelo,
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.7,
-        "max_tokens": 500
-    }
-
-    response = requests.post(url, headers=headers, json=payload)
-    response.raise_for_status()
-    return response.json()["choices"][0]["message"]["content"]
-
-# Endpoint del chatbot
-@app.post("/chat")
-async def chat(request: Request):
-    body = await request.json()
-    pregunta = body.get("mensaje")
-
-    if not pregunta:
-        return {"error": "No se recibió el mensaje"}
-
-    # Buscar los 3 documentos más relevantes
-    resultados = vectorstore.similarity_search(pregunta, k=3)
-    contexto = "\n\n".join([doc.page_content for doc in resultados])
-
-    # Construir prompt contextual
-    prompt = f"""
-Eres un asesor laboral profesional y amable. Tienes acceso a una lista de ofertas laborales relevantes extraídas de una base de datos.
-
-Debes responder exclusivamente usando esa información. Si el usuario pregunta por las carreras profesionales para las cuales hay empleos disponibles, analiza los campos 'carreras requeridas' o 'majors' de las ofertas y menciona solo los nombres de las carreras que aparecen.
-
-Luego, pregúntale si le gustaría conocer más detalles sobre alguna de esas opciones.
-
-Ofertas laborales encontradas:
-
-{contexto}
-
-Usuario: {pregunta}
-Asesor:
-"""
-
-
+def generar_con_groq(mensajes: list, modelo: str = "llama3-8b-8192") -> str:
     try:
-        respuesta = generar_con_together(prompt)
+        response = client.chat.completions.create(
+            model=modelo,
+            messages=mensajes,
+            temperature=0.5,
+            max_tokens=600
+        )
+        return response.choices[0].message.content
     except Exception as e:
-        return {"error": f"No se pudo generar respuesta: {e}"}
+        print(f"🚨 Error Groq: {e}")
+        return "Lo siento, tengo problemas para responder ahora. Intenta de nuevo."
 
-    return {"respuesta": respuesta}
+def es_pregunta_de_seguimiento(texto: str):
+    texto = texto.lower().strip()
+    claves = ["detalle", "más info", "más detalles", "dime más", "oferta", "primera", "segunda", "tercera"]
+    return any(p in texto for p in claves)
 
-from fastapi import Form
-from fastapi.responses import PlainTextResponse
-from twilio.twiml.messaging_response import MessagingResponse
+def extraer_numero_oferta(texto: str):
+    for palabra in texto.split():
+        if palabra.isdigit():
+            return int(palabra)
+    return None
+
+# ===================== CARGA VECTORSTORE =====================
+vectorstore = cargar_vectorstore()
+
+# ===================== API FASTAPI =====================
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
+
+@app.get("/")
+async def root():
+    return {"mensaje": "Jobly está en línea ✅"}
 
 @app.post("/twilio", response_class=PlainTextResponse)
-async def recibir_whatsapp(
-    Body: str = Form(...),
-    From: str = Form(...)
-):
+async def recibir_whatsapp(Body: str = Form(...), From: str = Form(...)):
     user_id = From
-    conversaciones[user_id].append({"usuario": Body})
+    pregunta_usuario = Body.strip()
+    estado = conversaciones[user_id]
+    historial = estado["historial"]
 
-    resultados = vectorstore.similarity_search(Body, k=3)
-    contexto = "\n\n".join([doc.page_content for doc in resultados])
+    contexto_texto = ""
+    if historial and es_pregunta_de_seguimiento(pregunta_usuario):
+        num = extraer_numero_oferta(pregunta_usuario)
+        if num and num <= len(estado["ofertas"]):
+            oferta = estado["ofertas"][num-1]
+            contexto_texto = f"[Oferta {num}]\n{oferta['contenido']}"
+        else:
+            contexto_texto = "\n\n".join([f"[Oferta {i+1}]\n{o['contenido']}" for i,o in enumerate(estado["ofertas"])])
+    else:
+        docs = vectorstore.similarity_search(pregunta_usuario, k=3)
+        estado["ultimo_contexto"] = docs
+        estado["ofertas"] = [{"id": i+1, "contenido": doc.page_content} for i, doc in enumerate(docs)]
+        contexto_texto = "\n\n".join([f"[Oferta {i+1}]\n{doc.page_content}" for i, doc in enumerate(docs)])
 
-    historial = conversaciones[user_id][-3:]
-    historia_txt = ""
-    for turno in historial:
-        if "usuario" in turno:
-            historia_txt += f"Usuario: {turno['usuario']}\n"
-        if "bot" in turno:
-            historia_txt += f"Asesor: {turno['bot']}\n"
+    mensajes = [{"role": "system", "content": SYSTEM_PROMPT}]
+    for turno in historial[-2:]:
+        mensajes.append({"role": "user", "content": turno["usuario"]})
+        mensajes.append({"role": "assistant", "content": turno["bot"]})
 
-    prompt = f"""
-Actúas como un asesor laboral amable y cercano. Tienes acceso a una lista de ofertas laborales que vienen de una base de datos actualizada.
+    prompt_usuario = f"""
+Aquí están las ofertas disponibles (usa solo esto):
+{contexto_texto}
 
-Responde al usuario utilizando solo la información que aparece en esas ofertas. Si el usuario te pregunta por las carreras para las que hay empleos, revisa las secciones de 'carreras requeridas' y menciona solo las que realmente aparecen. Puedes usar un tono cordial y natural, como si estuvieras conversando para ayudar.
-
-Aquí tienes las ofertas que coinciden con lo que busca el usuario:
-
-{contexto}
-
-Usuario: {Body}
-Asesor:
+Pregunta: "{pregunta_usuario}"
 """
+    mensajes.append({"role": "user", "content": prompt_usuario})
+    respuesta_bot = generar_con_groq(mensajes)
 
+    historial.append({"usuario": pregunta_usuario, "bot": respuesta_bot})
+    estado["historial"] = historial[-5:]
 
-    try:
-        respuesta = generar_con_together(prompt)
-        if len(respuesta) > 1500:
-            respuesta = respuesta[:1450] + "\n\n(Respuesta recortada por límite de mensaje)"
-        conversaciones[user_id][-1]["bot"] = respuesta
-    except Exception:
-        respuesta = "Lo siento, hubo un error generando la respuesta."
-
-    from twilio.twiml.messaging_response import MessagingResponse
     twilio_resp = MessagingResponse()
-    twilio_resp.message(respuesta)
+    twilio_resp.message(respuesta_bot)
+    return PlainTextResponse(twilio_resp.to_xml(), media_type="application/xml")
 
-    # ❗ DEVOLVER como PlainTextResponse
-    return PlainTextResponse(str(twilio_resp), media_type="application/xml")
-
-
-    
-
-# Para ejecutar localmente
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    print("🚀 Jobly corriendo en http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
