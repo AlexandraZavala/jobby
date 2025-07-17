@@ -1,4 +1,4 @@
-# TRY3 - Sistema de Búsqueda Inteligente de Empleos
+# JOBLY - Sistema de Búsqueda Inteligente de Empleos
 
 Sistema completo de búsqueda de empleos que incluye web scraping de LinkedIn, API inteligente con FastAPI, y frontend interactivo en React.
 
